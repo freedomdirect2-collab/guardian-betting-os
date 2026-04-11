@@ -1,5 +1,3 @@
-import { useState, useEffect, useCallback, useRef } from “react”;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // GUARDIAN BETTING OS v17 — DUAL MODE
 // BETTOR MODE: Fire plays instantly · OPERATOR MODE: Full slate + math + controls
@@ -8,8 +6,8 @@ import { useState, useEffect, useCallback, useRef } from “react”;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SK = { user:“gos:user”, history:“gos:history”, sessions:“gos:sessions”, ih:“gos:ih” };
-const load = async(k,fb)=>{ try{ if(typeof window.storage!==“undefined”){const r=await window.storage.get(k);return r?JSON.parse(r.value):fb;}const v=localStorage.getItem(k);return v?JSON.parse(v):fb; }catch{return fb;} };
-const save = async(k,v)=>{ try{ if(typeof window.storage!==“undefined”){await window.storage.set(k,JSON.stringify(v));}else{localStorage.setItem(k,JSON.stringify(v));} }catch{} };
+const load = async(k,fb)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{return fb;} };
+const save = async(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} };
 
 // ── ARCHETYPES ────────────────────────────────────────────────────────────────
 const ARC = {
@@ -861,7 +859,7 @@ return (
 );
 }
 
-export default function GuardianOS() {
+function GuardianOS() {
 const [authed, setAuthed] = useState(()=> sessionStorage.getItem(PASS_KEY)===“1”);
 if (!authed) return <PasswordGate onUnlock={()=>setAuthed(true)}/>;
 return <GuardianOSApp/>;
