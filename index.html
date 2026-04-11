@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#08081c"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Guardian OS"/>
+<title>Guardian OS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body,#root{height:100%;background:#08081c;color:#fff;font-family:'Nunito','Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GUARDIAN BETTING OS v17 — DUAL MODE
+// BETTOR MODE: Fire plays instantly · OPERATOR MODE: Full slate + math + controls
+// GWP Engine · True Kelly · Split Allocation · $1M Compounding Path
+// Todd Anthony Mencias · Guardian OS Holdings LLC
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SK = { user:“gos:user”, history:“gos:history”, sessions:“gos:sessions”, ih:“gos:ih” };
+const load = async(k,fb)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{return fb;} };
+const save = async(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} };
+
+// ── ARCHETYPES ────────────────────────────────────────────────────────────────
+const ARC = {
+sharp_confirm:{ label:“Sharp Confirm”, emoji:“💰”, roi:12.4, color:”#00d97e”, minEdge:6 },
+steam_move:   { label:“Steam Move”,    emoji:“💨”, roi:11.2, color:”#f97316”, minEdge:5 },
+fade_public:  { label:“Fade Public”,   emoji:“🔄”, roi:9.8,  color:”#4488ff”, minEdge:4 },
+injury_edge:  { label:“Injury Edge”,   emoji:“🩹”, roi:8.1,  color:”#fbbf24”, minEdge:4 },
+momentum_ride:{ label:“Momentum”,      emoji:“🚀”, roi:7.3,  color:”#a78bfa”, minEdge:3 },
+line_value:   { label:“Line Value”,    emoji:“📈”, roi:6.5,  color:”#06b6d4”, minEdge:3 },
+};
+
+// ── FULL GAME SLATE ───────────────────────────────────────────────────────────
+const GAMES = [
+{ id:“sx1”,sport:“SX”,emoji:“🏍”,time:“5:29 PM”,away:“Ken Roczen #94”,home:“Hunter Lawrence #96”,
+awayML:+180,homeML:+240,injuries:{home:[“Wrist”],away:[]},
+momentum:{home:0.72,away:0.92},playoffStake:{home:0.95,away:0.95},
+publicPct:45,sharpMoney:“away”,lineMove:0,
+context:“Championship: Tomac=Lawrence=245, Roczen 240. W2 streak.”,alert:“Roczen #1 pick”,
+bets:[
+{id:“sx-roc”,type:“Win”,   label:“Roczen WIN”,   odds:+180,side:“away”,arc:“sharp_confirm”},
+{id:“sx-law”,type:“Win”,   label:“Lawrence WIN”, odds:+240,side:“home”,arc:“momentum_ride”},
+{id:“sx-p2”, type:“Podium”,label:“Roczen Top-2”, odds:-135,side:“away”,arc:“momentum_ride”},
+{id:“sx-p3”, type:“Podium”,label:“Roczen Top-3”, odds:-280,side:“away”,arc:“line_value”},
+]},
+{ id:“golf1”,sport:“Golf”,emoji:“⛳”,time:“R3 Live”,away:“Rory McIlroy”,home:“Scottie Scheffler”,
+awayML:+245,homeML:+340,injuries:{home:[],away:[“Back spasms”]},
+momentum:{home:0.78,away:0.88},playoffStake:{home:0.95,away:0.95},
+publicPct:52,sharpMoney:“away”,lineMove:0,
+context:“McIlroy co-leads -7. Scheffler -2. Sharp on McIlroy.”,alert:“Monitor back spasms”,
+bets:[
+{id:“g-mci”, type:“Outright”,label:“McIlroy WIN”,    odds:+245,side:“away”,arc:“sharp_confirm”},
+{id:“g-sch”, type:“Outright”,label:“Scheffler WIN”,  odds:+340,side:“home”,arc:“line_value”},
+{id:“g-t5m”, type:“Top-5”,   label:“McIlroy Top-5”,  odds:-150,side:“away”,arc:“line_value”},
+{id:“g-t10s”,type:“Top-10”,  label:“Scheffler Top-10”,odds:-200,side:“home”,arc:“line_value”},
+]},
+{ id:“nhl1”,sport:“NHL”,emoji:“🏒”,time:“3:00 PM”,away:“Tampa Bay Lightning”,home:“Boston Bruins”,
+awayML:+115,homeML:-135,ou:5.5,injuries:{home:[],away:[]},
+momentum:{home:0.55,away:0.60},playoffStake:{home:0.80,away:0.85},
+publicPct:52,sharpMoney:“away”,lineMove:0,
+context:“TB 51.5% win prob. Lightning elim Montreal 2-1 last night.”,
+bets:[
+{id:“nhl1-aml”,type:“ML”, label:“Lightning +115”,odds:+115,side:“away”,arc:“fade_public”},
+{id:“nhl1-hml”,type:“ML”, label:“Bruins -135”,   odds:-135,side:“home”,arc:“line_value”},
+{id:“nhl1-pl”, type:“PL”, label:“Lightning +1.5”,odds:-175,side:“away”,arc:“line_value”},
+{id:“nhl1-ou”, type:“O/U”,label:“Over 5.5”,      odds:-115,side:“over”,arc:“line_value”},
+]},
+{ id:“nhl3”,sport:“NHL”,emoji:“🏒”,time:“4:00 PM”,away:“NY Rangers”,home:“Dallas Stars”,
+awayML:+155,homeML:-185,ou:5.5,injuries:{home:[],away:[]},
+momentum:{home:0.75,away:0.45},playoffStake:{home:0.85,away:0.75},
+publicPct:62,sharpMoney:“home”,lineMove:-0.5,
+context:“Dallas 62.4% win prob. Line moved -0.5 toward Dallas.”,
+bets:[
+{id:“nhl3-hml”,type:“ML”, label:“Dallas -185”,  odds:-185,side:“home”,arc:“steam_move”},
+{id:“nhl3-aml”,type:“ML”, label:“Rangers +155”, odds:+155,side:“away”,arc:“fade_public”},
+{id:“nhl3-pl”, type:“PL”, label:“Rangers +1.5”, odds:-155,side:“away”,arc:“line_value”},
+{id:“nhl3-ou”, type:“O/U”,label:“Over 5.5”,     odds:-115,side:“over”,arc:“line_value”},
+]},
+{ id:“nhl5”,sport:“NHL”,emoji:“🏒”,time:“6:00 PM”,away:“Florida Panthers”,home:“Toronto Leafs”,
+awayML:+118,homeML:-138,ou:6.0,injuries:{home:[],away:[]},
+momentum:{home:0.55,away:0.45},playoffStake:{home:0.90,away:0.88},
+publicPct:52,sharpMoney:“home”,lineMove:0,
+context:“Toronto 54.9% win prob. Panthers lost 5-1 last night — back-to-back.”,alert:“FLA B2B”,
+bets:[
+{id:“nhl5-hml”,type:“ML”, label:“Toronto -138”,  odds:-138,side:“home”,arc:“injury_edge”},
+{id:“nhl5-aml”,type:“ML”, label:“Panthers +118”, odds:+118,side:“away”,arc:“fade_public”},
+{id:“nhl5-pl”, type:“PL”, label:“Panthers +1.5”, odds:-175,side:“away”,arc:“line_value”},
+{id:“nhl5-ou”, type:“O/U”,label:“Over 6.0”,      odds:-115,side:“over”,arc:“line_value”},
+]},
+{ id:“n1”,sport:“NBA”,emoji:“🏀”,time:“5:00 PM Sun”,away:“Charlotte Hornets”,home:“NY Knicks”,
+awayML:+320,homeML:-400,spread:+9.5,ou:218.5,injuries:{home:[],away:[]},
+momentum:{home:0.32,away:0.78},playoffStake:{home:0.10,away:0.88},
+publicPct:38,sharpMoney:“away”,lineMove:+1.5,
+context:“CHA 72.5% win prob. Knicks final game — resting starters.”,alert:“CHECK Knicks lineup”,
+bets:[
+{id:“n1-sp”, type:“Spread”,label:“Hornets +9.5”,  odds:-110,side:“away”,arc:“sharp_confirm”},
+{id:“n1-aml”,type:“ML”,    label:“Hornets +320”,  odds:+320,side:“away”,arc:“fade_public”},
+{id:“n1-hml”,type:“ML”,    label:“Knicks -400”,   odds:-400,side:“home”,arc:“line_value”},
+{id:“n1-ou”, type:“O/U”,   label:“Over 218.5”,    odds:-110,side:“over”,arc:“line_value”},
+]},
+{ id:“n2”,sport:“NBA”,emoji:“🏀”,time:“5:00 PM Sun”,away:“Atlanta Hawks”,home:“Miami Heat”,
+awayML:+155,homeML:-185,spread:-4.5,ou:228.5,injuries:{home:[],away:[]},
+momentum:{home:0.35,away:0.82},playoffStake:{home:0.95,away:0.82},
+publicPct:42,sharpMoney:“away”,lineMove:+0.5,
+context:“ATL 69.2% win prob. Hawks beat CLE by 22. W2 streak.”,
+bets:[
+{id:“n2-aml”,type:“ML”,    label:“Hawks +155”,  odds:+155,side:“away”,arc:“momentum_ride”},
+{id:“n2-sp”, type:“Spread”,label:“Hawks +4.5”,  odds:-108,side:“away”,arc:“sharp_confirm”},
+{id:“n2-hml”,type:“ML”,    label:“Heat -185”,   odds:-185,side:“home”,arc:“line_value”},
+{id:“n2-ou”, type:“O/U”,   label:“Over 228.5”,  odds:-110,side:“over”,arc:“line_value”},
+]},
+{ id:“n3”,sport:“NBA”,emoji:“🏀”,time:“5:00 PM Sun”,away:“Orlando Magic”,home:“Boston Celtics”,
+awayML:-130,homeML:+110,spread:-2.5,ou:221.5,injuries:{home:[“Jaylen Brown OUT (Achilles)”],away:[]},
+momentum:{home:0.65,away:0.88},playoffStake:{home:0.75,away:0.95},
+publicPct:48,sharpMoney:“away”,lineMove:-0.5,
+context:“ORL 60.1% win prob. Magic clinched. Brown OUT (Achilles).”,
+bets:[
+{id:“n3-aml”,type:“ML”,    label:“Magic -130”,    odds:-130,side:“away”,arc:“injury_edge”},
+{id:“n3-hml”,type:“ML”,    label:“Celtics +110”,  odds:+110,side:“home”,arc:“line_value”},
+{id:“n3-sp”, type:“Spread”,label:“Magic -2.5”,    odds:-110,side:“away”,arc:“injury_edge”},
+{id:“n3-ou”, type:“O/U”,   label:“Over 221.5”,    odds:-110,side:“over”,arc:“line_value”},
+]},
+{ id:“n4”,sport:“NBA”,emoji:“🏀”,time:“7:30 PM Sun”,away:“Golden State Warriors”,home:“LA Clippers”,
+awayML:+290,homeML:-360,spread:-8.5,ou:224.5,injuries:{home:[],away:[]},
+momentum:{home:0.82,away:0.48},playoffStake:{home:0.88,away:0.72},
+publicPct:62,sharpMoney:“home”,lineMove:-0.5,
+context:“LAC 76.4% win prob. Warriors back-to-back.”,alert:“CHECK Steph status”,
+bets:[
+{id:“n4-sp”, type:“Spread”,label:“Clippers -8.5”,  odds:-110,side:“home”,arc:“steam_move”},
+{id:“n4-hml”,type:“ML”,    label:“Clippers -360”,  odds:-360,side:“home”,arc:“steam_move”},
+{id:“n4-aml”,type:“ML”,    label:“Warriors +290”,  odds:+290,side:“away”,arc:“line_value”},
+{id:“n4-ou”, type:“O/U”,   label:“Over 224.5”,     odds:-110,side:“over”,arc:“line_value”},
+]},
+{ id:“m1”,sport:“MLB”,emoji:“⚾”,time:“12:05 PM”,away:“Arizona D-Backs”,home:“Philadelphia Phillies”,
+awayML:+145,homeML:-170,ou:8.5,injuries:{home:[],away:[]},
+momentum:{home:0.45,away:0.72},playoffStake:{home:0.65,away:0.65},
+publicPct:44,sharpMoney:“away”,lineMove:+1.5,
+context:“D-Backs WON 5-4 yesterday. 3-0 in series. Line moved +1.5 toward AZ.”,alert:“Confirm SP”,
+bets:[
+{id:“m1-aml”,type:“ML”,label:“D-Backs +145”,  odds:+145,side:“away”,arc:“steam_move”},
+{id:“m1-hml”,type:“ML”,label:“Phillies -170”, odds:-170,side:“home”,arc:“line_value”},
+{id:“m1-rl”, type:“RL”,label:“D-Backs +1.5”,  odds:-145,side:“away”,arc:“line_value”},
+{id:“m1-f5”, type:“F5”,label:“D-Backs F5 ML”, odds:+135,side:“away”,arc:“momentum_ride”},
+]},
+{ id:“m2”,sport:“MLB”,emoji:“⚾”,time:“1:20 PM”,away:“Pittsburgh Pirates”,home:“Chicago Cubs”,
+awayML:+118,homeML:-138,ou:8.0,injuries:{home:[],away:[]},
+momentum:{home:0.45,away:0.65},playoffStake:{home:0.65,away:0.60},
+publicPct:52,sharpMoney:“away”,lineMove:+0.5,
+context:“Pirates WON 2-0 yesterday. Cubs 0-3 in Imanaga starts.”,
+bets:[
+{id:“m2-aml”,type:“ML”,label:“Pirates +118”,   odds:+118,side:“away”,arc:“fade_public”},
+{id:“m2-hml”,type:“ML”,label:“Cubs -138”,       odds:-138,side:“home”,arc:“line_value”},
+{id:“m2-rl”, type:“RL”,label:“Pirates +1.5”,    odds:-122,side:“away”,arc:“line_value”},
+{id:“m2-f5”, type:“F5”,label:“Pirates F5 +108”, odds:+108,side:“away”,arc:“momentum_ride”},
+]},
+{ id:“m4”,sport:“MLB”,emoji:“⚾”,time:“8:40 PM”,away:“Houston Astros”,home:“Seattle Mariners”,
+awayML:+110,homeML:-130,ou:7.5,injuries:{home:[],away:[]},
+momentum:{home:0.65,away:0.55},playoffStake:{home:0.70,away:0.70},
+publicPct:55,sharpMoney:“home”,lineMove:0,
+context:“Mariners WON 9-6 last night. Hancock 0.71 ERA.”,
+bets:[
+{id:“m4-hml”,type:“ML”,label:“Mariners -130”, odds:-130,side:“home”,arc:“momentum_ride”},
+{id:“m4-aml”,type:“ML”,label:“Astros +110”,   odds:+110,side:“away”,arc:“line_value”},
+{id:“m4-rl”, type:“RL”,label:“Astros +1.5”,   odds:-140,side:“away”,arc:“line_value”},
+{id:“m4-ou”, type:“O/U”,label:“Over 7.5”,     odds:-110,side:“over”,arc:“line_value”},
+]},
+{ id:“m5”,sport:“MLB”,emoji:“⚾”,time:“8:10 PM”,away:“Texas Rangers”,home:“LA Dodgers”,
+awayML:+165,homeML:-200,ou:9.0,injuries:{home:[],away:[“Langford Q (hamstring)”]},
+momentum:{home:0.70,away:0.50},playoffStake:{home:0.72,away:0.68},
+publicPct:62,sharpMoney:“home”,lineMove:0,
+context:“Dodgers won 8-7 last night. Langford questionable.”,alert:“Langford Q”,
+bets:[
+{id:“m5-hml”,type:“ML”,label:“Dodgers -200”,   odds:-200,side:“home”,arc:“injury_edge”},
+{id:“m5-aml”,type:“ML”,label:“Rangers +165”,   odds:+165,side:“away”,arc:“line_value”},
+{id:“m5-rl”, type:“RL”,label:“Dodgers -1.5”,   odds:+115,side:“home”,arc:“line_value”},
+{id:“m5-ou”, type:“O/U”,label:“Over 9.0”,      odds:-110,side:“over”,arc:“line_value”},
+]},
+];
+
+const ALL_BETS = GAMES.flatMap(g=>g.bets.map(b=>({…b,game:g,gameName:`${g.away} vs ${g.home}`})));
+
+const DEFAULT_USER = {
+bankroll:1037.49,bowlCap:200,bowlUsed:0,drift:0.15,lossStreak:0,winStreak:3,
+betsToday:0,loopScore:89,eAcc:0.037,bCapRatio:1.037,
+totalBets:5,wins:3,losses:2,totalWagered:80,totalReturned:116.49,
+};
+const DEFAULT_IH = { rlm:0.35,steam:0.45,sharpDiv:0.30,polyDiverg:0.15,clvExpect:0.40,socialNoise:0.20,fatigue:0.10,weather:0.00,refProfile:0.15,lmTripwire:0.10 };
+
+// ── MATH ENGINE ───────────────────────────────────────────────────────────────
+const iP = o => o>0?100/(o+100):Math.abs(o)/(Math.abs(o)+100);
+const fmt = o => o==null?”—”:o>0?`+${o}`:`${o}`;
+const payout = (s,o) => !s||!o?0:s*(o>0?1+o/100:1+100/Math.abs(o));
+const calcIH = s => Math.max(-1,Math.min(1,
+0.18*s.rlm+0.16*s.steam+0.15*s.sharpDiv+0.12*s.polyDiverg+
+0.15*s.clvExpect+0.08*s.refProfile-0.10*s.socialNoise-
+0.08*s.fatigue-0.06*s.weather-0.08*Math.abs(s.lmTripwire)
+));
+
+// Guardian Win Probability — your model vs the market
+function calcGWP(bet, game, ih=0) {
+const side = bet.side===“home”?“home”:bet.side===“away”?“away”:bet.side;
+const mktP = iP(bet.odds);
+const fair = mktP/1.045; // remove vig
+const mom  = game.momentum?.[side]??0.5;
+const stk  = game.playoffStake?.[side]??0.5;
+const pub  = (game.publicPct??50)/100;
+const lm   = game.lineMove??0;
+const sharpWith = (game.sharpMoney??””).split(”,”).map(s=>s.trim()).includes(side);
+const sharpAgainst = (game.sharpMoney??””).length>0 && !sharpWith;
+const inj  = (game.injuries?.[side]?.length??0);
+const dMom   = (mom-0.5)*0.18;
+const dStake = (stk-0.5)*0.12;
+const dSharp = sharpWith?0.055:sharpAgainst?-0.04:0;
+const dLine  = Math.sign(lm)===(side===“away”?1:-1)?Math.abs(lm)*0.015:-Math.abs(lm)*0.008;
+const dPub   = sharpWith&&pub>0.65?(pub-0.65)*0.20:pub>0.65?-(pub-0.65)*0.12:0;
+const dIH    = Math.max(-1,Math.min(1,ih))*0.06;
+const dInj   = -inj*0.03;
+const gwp = Math.max(0.05,Math.min(0.95,fair+dMom+dStake+dSharp+dLine+dPub+dIH+dInj));
+const edge = +((gwp-mktP)*100).toFixed(1);
+return { gwp:+(gwp*100).toFixed(1), mktP:+(mktP*100).toFixed(1), edge, dMom,dStake,dSharp,dLine,dPub,dIH,dInj };
+}
+
+// True Kelly from YOUR edge (not market price)
+function trueKelly(bankroll, gwpObj, odds) {
+const edge = gwpObj.edge/100;
+if(edge<=0) return { stake:5, kellyPct:0 };
+const dec = odds>0?1+odds/100:1+100/Math.abs(odds);
+const fullK = edge/(dec-1);
+const qK = Math.min(0.04, fullK*0.25);
+return { stake:+Math.max(5,bankroll*qK).toFixed(2), kellyPct:+(qK*100).toFixed(2) };
+}
+
+// Score a bet — GBS drives action label, GWP drives stake size
+function scoreBet(bet, game, user, ih=0) {
+if(!bet.odds) return { gbs:0, action:“BLOCK” };
+const side = bet.side===“home”?“home”:bet.side===“away”?“away”:bet.side;
+const gwpR = calcGWP(bet, game, ih);
+const edge = gwpR.edge;
+const mom  = game.momentum?.[side]??0.5;
+const stk  = game.playoffStake?.[side]??0.5;
+const pub  = (game.publicPct??50)/100;
+const shp  = (game.sharpMoney??””).includes(side)?0.14:(game.sharpMoney?.length>0?-0.06:0);
+const inj  = Math.min(0.4,(game.injuries?.[side]?.length??0)*0.10);
+const lm   = game.lineMove??0;
+const E = Math.min(1,Math.max(0,0.5+edge/100*3.0));
+const T = Math.min(1,Math.max(0,0.5+lm*0.06));
+const M = Math.min(1,Math.max(0,0.5+shp-(pub>0.80?0.08:0)));
+const C = Math.min(1,mom*0.45+stk*0.35+E*0.20);
+const P = Math.min(1,user.drift*0.25+(1-M)*0.20+(1-mom)*0.20);
+const D = Math.min(1,Math.max(0,user.drift*0.60));
+const V = Math.min(1,inj);
+const raw = 0.30*E+0.12*T+0.20*M+0.24*C-0.07*P-0.05*D-0.04*V;
+const ihM = 1+Math.max(-0.2,Math.min(0.4,ih))*0.30;
+const arcB = ARC[bet.arc]&&raw*115*ihM>=50?4:0;
+const gbs = Math.min(100,Math.round(raw*115*ihM)+arcB);
+let action = gbs>=58?“APPROVE”:gbs>=44?“WATCHLIST”:gbs>=32?“REDUCE”:“BLOCK”;
+if(user.drift>0.80||ih<-0.5) action=“BLOCK”;
+else if(inj>=0.35||user.lossStreak>=5) action=“REDUCE”;
+else if(edge<=-2) action=“BLOCK”;
+const kelly = trueKelly(user.bankroll, gwpR, bet.odds);
+return { gbs, action, …gwpR, kellyStake:kelly.stake, kellyPct:kelly.kellyPct };
+}
+
+// Split allocation across multiple plays (edge-proportional, 8% total cap)
+function splitAlloc(plays, bankroll) {
+const withEdge = plays.filter(p=>p.sc.edge>0);
+const totalEdge = withEdge.reduce((s,p)=>s+p.sc.edge,0)||1;
+const cap = bankroll*0.08;
+return plays.map(p=>{
+const share = Math.max(0,p.sc.edge)/totalEdge;
+const raw = cap*share;
+return {…p, splitStake:+Math.max(5,Math.min(bankroll*0.03,raw)).toFixed(2), splitPct:+(share*100).toFixed(0)};
+});
+}
+
+// Score every bet in slate
+function scoreAll(user, ih) {
+return GAMES.flatMap(g=>g.bets.map(b=>{
+const sc = scoreBet(b, g, user, ih);
+return {…b, sc, game:g, gameName:`${g.away} vs ${g.home}`};
+})).sort((a,b)=>b.sc.edge-a.sc.edge);
+}
+
+// Top plays (APPROVE+WATCHLIST, 1 per game, split-allocated)
+function topPlays(user, ih, max=6) {
+const all = scoreAll(user, ih).filter(b=>b.sc.action===“APPROVE”||b.sc.action===“WATCHLIST”);
+const seen=new Set(), out=[];
+for(const b of all){ if(!seen.has(b.game.id)){seen.add(b.game.id);out.push(b);} if(out.length>=max)break; }
+return splitAlloc(out, user.bankroll);
+}
+
+// $1M compounding path
+function calcMillionPath(bankroll, targetDays=30, dailyROI=0.08) {
+const days=[];
+let bal=bankroll;
+for(let d=1;d<=targetDays;d++){
+bal=bal*(1+dailyROI);
+days.push({day:d,bal:+bal.toFixed(2)});
+}
+return days;
+}
+function requiredDailyROI(bankroll, target, days) {
+return Math.pow(target/bankroll, 1/days)-1;
+}
+
+// Live fetch
+async function fetchLive() {
+const gnames = GAMES.slice(0,6).map(g=>`${g.away} vs ${g.home}`).join(”, “);
+const prompt = `Sports betting intel. Return ONLY valid JSON, no markdown. Today: ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',year:'numeric'})}. Games: ${gnames}. Search ESPN, ActionNetwork, Rotowire, Covers, OddsShark. Return: {"ts":"ISO","alerts":[],"ih":{"rlm":0.35,"steam":0.45,"sharpDiv":0.30,"polyDiverg":0.15,"clvExpect":0.40,"socialNoise":0.20,"fatigue":0.10,"weather":0.0,"refProfile":0.15,"lmTripwire":0.10},"narrative":"2 sentences sharp money today"} ih values must be floats -1.0 to 1.0.`;
+const r = await fetch(“https://api.anthropic.com/v1/messages”,{method:“POST”,headers:{“Content-Type”:“application/json”},
+body:JSON.stringify({model:“claude-sonnet-4-20250514”,max_tokens:800,tools:[{type:“web_search_20250305”,name:“web_search”}],messages:[{role:“user”,content:prompt}]})});
+const d=await r.json();
+const txt=(d.content||[]).filter(b=>b.type===“text”).map(b=>b.text).join(””);
+const clean=txt.replace(/`json|`/g,””).trim();
+const s=clean.indexOf(”{”),e=clean.lastIndexOf(”}”);
+if(s===-1)return null;
+return JSON.parse(clean.slice(s,e+1));
+}
+
+// ── STYLES ────────────────────────────────────────────────────────────────────
+const AC = a=>({
+APPROVE:  {c:”#00d97e”,bg:”#001f14”,e:“✅”},
+WATCHLIST:{c:”#4488ff”,bg:”#001428”,e:“👁”},
+REDUCE:   {c:”#fbbf24”,bg:”#1f1600”,e:“⚠️”},
+BLOCK:    {c:”#ef4444”,bg:”#1a0000”,e:“🚫”},
+}[a]||{c:”#666”,bg:”#111”,e:”—”});
+const edgeC = e => e>=10?”#00d97e”:e>=5?”#a3e635”:e>=2?”#fbbf24”:e>0?”#fb923c”:”#ef4444”;
+const fmt2 = n => n>=1e6?”$”+( n/1e6).toFixed(2)+“M”:n>=1e3?”$”+(n/1e3).toFixed(1)+“K”:”$”+n.toFixed(0);
+
+// ── RING ──────────────────────────────────────────────────────────────────────
+function Ring({score,action,size=52}){
+const st=AC(action);
+const r=size*.38,c=size/2,ci=2*Math.PI*r,d=(score/100)*ci;
+return(<div style={{position:“relative”,width:size,height:size,flexShrink:0}}>
+<svg width={size} height={size} style={{transform:“rotate(-90deg)”}}>
+<circle cx={c} cy={c} r={r} fill="none" stroke="#111128" strokeWidth={size*.075}/>
+<circle cx={c} cy={c} r={r} fill=“none” stroke={st.c} strokeWidth={size*.075} strokeDasharray={`${d} ${ci}`} strokeLinecap=“round”/>
+</svg>
+<div style={{position:“absolute”,top:“50%”,left:“50%”,transform:“translate(-50%,-50%)”,textAlign:“center”,lineHeight:1}}>
+<div style={{fontSize:size*.24,fontWeight:900,color:st.c}}>{score}</div>
+<div style={{fontSize:size*.10,color:st.c+“77”}}>GBS</div>
+</div>
+
+  </div>);
+}
+
+// ── EDGE BADGE — the one number that tells everything ─────────────────────────
+function EdgeBadge({edge,size=“md”}){
+const c=edgeC(edge);
+const fs=size===“lg”?18:size===“sm”?10:13;
+return(<div style={{background:c+“22”,border:`1px solid ${c}55`,borderRadius:7,padding:size===“lg”?“8px 14px”:“3px 8px”,textAlign:“center”,flexShrink:0}}>
+<div style={{fontSize:fs,fontWeight:900,color:c,lineHeight:1}}>{edge>0?”+”:””}{edge}%</div>
+<div style={{fontSize:fs*.55,color:c+“99”,marginTop:1}}>EDGE</div>
+
+  </div>);
+}
+
+// ── FIRE MODAL ────────────────────────────────────────────────────────────────
+function FireModal({bet,onConfirm,onClose,totalPlays=1}){
+const isSplit=totalPlays>1;
+// Guard against undefined splitStake / kellyStake (operator view bets may lack these)
+const safeKelly   = +(bet.sc?.kellyStake  ?? bet.sc?.kellyPct ? (bet.sc.kellyPct/100*(1037)) : 10);
+const safeSplit   = +(bet.splitStake       ?? safeKelly);
+const defStake    = isSplit ? safeSplit : safeKelly;
+const [stake,setStake]=useState((+defStake||10).toFixed(2));
+const st=AC(bet.sc.action);
+const arc=ARC[bet.arc];
+const cur=parseFloat(stake)||0;
+const profit=payout(cur,bet.odds)-cur;
+return(<div style={{position:“fixed”,inset:0,background:”#000000ee”,zIndex:500,display:“flex”,alignItems:“flex-end”,justifyContent:“center”}}>
+<div style={{background:“linear-gradient(180deg,#0e0e28,#09091e)”,border:“1px solid #00d97e33”,borderRadius:“20px 20px 0 0”,padding:20,width:“100%”,maxWidth:480,maxHeight:“92vh”,overflowY:“auto”}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:14}}>
+<div>
+<div style={{fontSize:16,fontWeight:900,color:”#fff”}}>🔥 Confirm Bet</div>
+<div style={{fontSize:9,color:”#444”}}>{isSplit?`${totalPlays}-way split allocation`:“Single play”}</div>
+</div>
+<button onClick={onClose} style={{background:“none”,border:“1px solid #1a1a30”,borderRadius:8,color:”#555”,fontSize:18,padding:“2px 10px”,cursor:“pointer”}}>×</button>
+</div>
+{/* Bet info */}
+<div style={{background:”#0d0d1e”,border:`1.5px solid ${st.c}44`,borderRadius:12,padding:12,marginBottom:12}}>
+<div style={{fontSize:8,color:”#444”,marginBottom:2}}>{bet.gameName}</div>
+<div style={{fontSize:15,fontWeight:900,color:”#fff”,marginBottom:8}}>{bet.label}</div>
+<div style={{display:“flex”,gap:8,alignItems:“center”,marginBottom:10,flexWrap:“wrap”}}>
+<span style={{background:”#13132a”,borderRadius:5,padding:“3px 8px”,fontSize:12,fontWeight:900,color:bet.odds>0?”#00d97e”:”#aaa”}}>{fmt(bet.odds)}</span>
+{arc&&<span style={{background:arc.color+“22”,border:`1px solid ${arc.color}44`,borderRadius:5,padding:“2px 6px”,fontSize:9,color:arc.color}}>{arc.emoji} {arc.label} · +{arc.roi}% ROI target</span>}
+</div>
+{/* Prob grid */}
+<div style={{display:“grid”,gridTemplateColumns:“1fr 1fr 1fr”,gap:6,background:”#07070f”,borderRadius:8,padding:“8px 10px”}}>
+<div style={{textAlign:“center”}}><div style={{fontSize:7,color:”#333”,marginBottom:2}}>MARKET</div><div style={{fontSize:16,fontWeight:900,color:”#777”}}>{bet.sc.mktP}%</div></div>
+<div style={{textAlign:“center”,borderLeft:“1px solid #1a1a2e”,borderRight:“1px solid #1a1a2e”}}>
+<div style={{fontSize:7,color:”#333”,marginBottom:2}}>GUARDIAN</div><div style={{fontSize:16,fontWeight:900,color:”#00d97e”}}>{bet.sc.gwp}%</div></div>
+<div style={{textAlign:“center”}}><div style={{fontSize:7,color:”#333”,marginBottom:2}}>EDGE</div>
+<div style={{fontSize:16,fontWeight:900,color:edgeC(bet.sc.edge)}}>{bet.sc.edge>0?”+”:””}{bet.sc.edge}%</div></div>
+</div>
+</div>
+{/* Split info */}
+{isSplit&&<div style={{background:”#0a0a28”,border:“1px solid #aa88ff33”,borderRadius:10,padding:“8px 12px”,marginBottom:12}}>
+<div style={{fontSize:8,color:”#aa88ff”,letterSpacing:1,marginBottom:4}}>SPLIT ({totalPlays} PLAYS)</div>
+<div style={{display:“flex”,justifyContent:“space-between”,fontSize:9}}>
+<span style={{color:”#666”}}>This play’s edge share</span><span style={{color:”#aa88ff”,fontWeight:700}}>{bet.splitPct??0}%</span>
+</div>
+<div style={{display:“flex”,justifyContent:“space-between”,fontSize:9,marginTop:2}}>
+<span style={{color:”#666”}}>Solo Kelly</span><span style={{color:”#555”}}>${safeKelly.toFixed(2)}</span>
+</div>
+<div style={{display:“flex”,justifyContent:“space-between”,fontSize:9,marginTop:2}}>
+<span style={{color:”#666”}}>Split stake</span><span style={{color:”#4488ff”,fontWeight:700}}>${safeSplit.toFixed(2)}</span>
+</div>
+</div>}
+{/* Stake input */}
+<div style={{marginBottom:12}}>
+<div style={{fontSize:8,color:”#444”,letterSpacing:1,marginBottom:5}}>STAKE AMOUNT</div>
+<div style={{position:“relative”,marginBottom:8}}>
+<span style={{position:“absolute”,left:12,top:“50%”,transform:“translateY(-50%)”,color:”#555”,fontSize:16,fontWeight:700}}>$</span>
+<input type=“number” min=“1” step=“1” value={stake} onChange={e=>setStake(e.target.value)}
+style={{width:“100%”,background:”#090918”,border:“1px solid #2a2a44”,borderRadius:10,color:”#fff”,fontSize:22,fontWeight:900,padding:“12px 12px 12px 28px”}}/>
+</div>
+<div style={{display:“flex”,gap:4}}>
+{[5,10,20,defStake].map((v,i)=>{
+const safeV = +(v||10);
+const lbl = i===3?(isSplit?“Split”:“Kelly”)+” $”+safeV.toFixed(0):`$${safeV}`;
+const active = Math.abs(parseFloat(stake)-+safeV.toFixed(2))<0.01;
+return(<button key={i} onClick={()=>setStake(safeV.toFixed(2))}
+style={{flex:1,background:active?(i===3?”#aa88ff22”:”#00d97e22”):”#0d0d1e”,border:`1px solid ${active?(i===3?"#aa88ff":"#00d97e"):"#1a1a30"}`,borderRadius:8,color:active?(i===3?”#aa88ff”:”#00d97e”):”#555”,fontSize:9,padding:“6px 2px”,cursor:“pointer”,fontWeight:active?900:400}}>
+{lbl}</button>);
+})}
+</div>
+</div>
+{/* Payout preview */}
+{cur>0&&<div style={{background:”#090916”,borderRadius:10,padding:“10px”,marginBottom:12,display:“grid”,gridTemplateColumns:“1fr 1fr 1fr”,gap:6,textAlign:“center”}}>
+<div><div style={{fontSize:7,color:”#444”,marginBottom:2}}>RISK</div><div style={{fontSize:14,fontWeight:900,color:”#fff”}}>${cur.toFixed(2)}</div></div>
+<div><div style={{fontSize:7,color:”#444”,marginBottom:2}}>WIN</div><div style={{fontSize:14,fontWeight:900,color:”#00d97e”}}>${profit.toFixed(2)}</div></div>
+<div><div style={{fontSize:7,color:”#444”,marginBottom:2}}>PAYOUT</div><div style={{fontSize:14,fontWeight:900,color:”#ccc”}}>${payout(cur,bet.odds).toFixed(2)}</div></div>
+</div>}
+<button onClick={()=>onConfirm(bet,parseFloat(stake)||defStake||10)}
+style={{width:“100%”,background:“linear-gradient(90deg,#00d97e,#00b568)”,border:“none”,borderRadius:12,color:”#000”,fontSize:16,fontWeight:900,padding:“14px”,cursor:“pointer”,marginBottom:8}}>
+🔥 FIRE BET
+</button>
+<button onClick={onClose} style={{width:“100%”,background:“none”,border:“1px solid #1a1a30”,borderRadius:12,color:”#444”,fontSize:12,padding:“10px”,cursor:“pointer”}}>Cancel</button>
+</div>
+
+  </div>);
+}
+
+// ── BETTOR MODE — PLAYS TAB ───────────────────────────────────────────────────
+function BettorPlays({plays,onFire,loggedIds,user,narrative,alerts,liveLoading}){
+return(<>
+{/* Stats strip */}
+{(()=>{
+const wp=user.totalBets>0?Math.round(user.wins/user.totalBets*100):0;
+const roi=user.totalWagered>0?(((user.totalReturned-user.totalWagered)/user.totalWagered)*100).toFixed(1):“0.0”;
+const profit=user.totalReturned-user.totalWagered;
+return(<div style={{display:“flex”,background:”#090916”,borderRadius:12,overflow:“hidden”,marginBottom:12,border:“1px solid #151530”}}>
+{[{l:“RECORD”,v:`${user.wins}W-${user.losses}L`,c:”#fff”,s:`${user.totalBets} bets`},
+{l:“WIN %”,v:`${wp}%`,c:wp>=55?”#00d97e”:wp>=45?”#fbbf24”:”#ef4444”,s:“all-time”},
+{l:“ROI”,v:`${parseFloat(roi)>=0?"+":""}${roi}%`,c:parseFloat(roi)>=0?”#00d97e”:”#ef4444”,s:`${profit>=0?"+":""}$${Math.abs(profit).toFixed(0)}`},
+{l:“BANKROLL”,v:`$${user.bankroll.toFixed(0)}`,c:”#4488ff”,s:“current”},
+].map((s,i)=>(<div key={s.l} style={{flex:1,padding:“9px 4px”,textAlign:“center”,borderRight:i<3?“1px solid #151530”:“none”}}>
+<div style={{fontSize:7,color:”#2a2a44”,letterSpacing:1,marginBottom:2}}>{s.l}</div>
+<div style={{fontSize:14,fontWeight:900,color:s.c,lineHeight:1}}>{s.v}</div>
+<div style={{fontSize:7,color:”#1a1a30”,marginTop:2}}>{s.s}</div>
+</div>))}
+</div>);
+})()}
+{liveLoading&&<div style={{background:”#001428”,border:“1px solid #4488ff22”,borderRadius:8,padding:“6px 12px”,marginBottom:8,fontSize:8,color:”#4488ff”}}>↻ Fetching live intel…</div>}
+{alerts.slice(0,1).map((a,i)=><div key={i} style={{background:”#1f0a00”,border:“1px solid #ff6b3322”,borderRadius:8,padding:“5px 12px”,marginBottom:8,fontSize:9,color:”#ff6b35”}}>⚡ {a}</div>)}
+{narrative&&<div style={{background:”#0a1a0a”,border:“1px solid #00d97e22”,borderRadius:9,padding:“7px 12px”,marginBottom:10,fontSize:9,color:”#7ab87a”,lineHeight:1.7}}>
+<div style={{fontSize:7,color:”#00d97e”,letterSpacing:1.5,marginBottom:2}}>🧠 LIVE INTEL</div>{narrative}</div>}
+{/* Split summary */}
+{plays.length>1&&<div style={{background:“linear-gradient(135deg,#0a0a28,#0d0d35)”,border:“1px solid #aa88ff33”,borderRadius:12,padding:“10px 14px”,marginBottom:10}}>
+<div style={{fontSize:9,fontWeight:900,color:”#aa88ff”,marginBottom:5}}>⚖️ Split — {plays.length} plays · Total ${plays.reduce((s,b)=>s+(+(b.splitStake??b.sc?.kellyStake??5)),0).toFixed(0)} at risk</div>
+{plays.map((b,i)=><div key={b.id} style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:3}}>
+<div style={{display:“flex”,gap:5,flex:1,minWidth:0}}>
+<span style={{fontSize:8,color:”#ff6b35”,fontWeight:700}}>#{i+1}</span>
+<span style={{fontSize:8,color:”#888”,overflow:“hidden”,textOverflow:“ellipsis”,whiteSpace:“nowrap”}}>{b.label}</span>
+</div>
+<div style={{display:“flex”,gap:8,flexShrink:0}}>
+<span style={{fontSize:8,color:edgeC(b.sc.edge)}}>{b.sc.edge>0?”+”:””}{b.sc.edge}%</span>
+<span style={{fontSize:10,fontWeight:900,color:”#4488ff”}}>${(+(b.splitStake??b.sc?.kellyStake??5)).toFixed(0)}</span>
+</div>
+</div>)}
+</div>}
+{plays.length===0&&<div style={{background:”#0d0d1e”,borderRadius:14,padding:30,textAlign:“center”}}>
+<div style={{fontSize:32,marginBottom:8}}>🔍</div>
+<div style={{color:”#333”,fontSize:12}}>No positive-edge plays right now</div>
+<div style={{color:”#2a2a44”,fontSize:9,marginTop:4}}>Guardian only fires when GWP > market price</div>
+</div>}
+{plays.map((b,i)=>{
+const st=AC(b.sc.action); const arc=ARC[b.arc];
+const isSplit=plays.length>1;
+const dispStake=+(isSplit?(b.splitStake??b.sc?.kellyStake??10):(b.sc?.kellyStake??10));
+const profit=payout(dispStake,b.odds)-dispStake;
+const [exp,setExp]=useState(false);
+return(<div key={b.id} style={{background:loggedIds.has(b.id)?”#001f0f”:“linear-gradient(145deg,#0c0c1e,#0f0f28)”,border:`2px solid ${loggedIds.has(b.id)?"#00d97e":st.c+"33"}`,borderRadius:14,marginBottom:10,overflow:“hidden”}}>
+<div style={{padding:“12px 14px 10px”}}>
+<div style={{display:“flex”,gap:6,alignItems:“center”,marginBottom:6,flexWrap:“wrap”}}>
+<span style={{background:”#ff6b3522”,color:”#ff6b35”,borderRadius:5,padding:“1px 6px”,fontSize:9,fontWeight:900}}>#{i+1}</span>
+{arc&&<span style={{background:arc.color+“22”,border:`1px solid ${arc.color}44`,borderRadius:5,padding:“1px 5px”,fontSize:8,color:arc.color}}>{arc.emoji} {arc.label}</span>}
+<span style={{fontSize:8,color:”#333”}}>{b.game.emoji} {b.game.sport} · {b.game.time}</span>
+</div>
+<div style={{display:“flex”,gap:10,alignItems:“center”}}>
+<Ring score={b.sc.gbs} action={b.sc.action} size={52}/>
+<div style={{flex:1,minWidth:0}}>
+<div style={{fontSize:14,fontWeight:900,color:”#fff”,lineHeight:1.2,marginBottom:2}}>{b.label}</div>
+<div style={{fontSize:9,color:”#444”,marginBottom:6}}>{b.gameName}</div>
+{/* THE KEY ROW: market vs guardian vs edge */}
+<div style={{display:“flex”,gap:8,flexWrap:“wrap”,alignItems:“center”}}>
+<span style={{fontSize:9,color:”#555”}}>Mkt <span style={{color:”#888”,fontWeight:700}}>{b.sc.mktP}%</span></span>
+<span style={{fontSize:9,color:”#555”}}>→ GWP <span style={{color:”#00d97e”,fontWeight:700}}>{b.sc.gwp}%</span></span>
+<span style={{background:”#13132a”,borderRadius:5,padding:“1px 6px”,fontSize:10,fontWeight:900,color:b.odds>0?”#00d97e”:”#aaa”}}>{fmt(b.odds)}</span>
+</div>
+</div>
+<EdgeBadge edge={b.sc.edge} size="md"/>
+</div>
+{/* Stake row */}
+<div style={{background:”#090916”,borderRadius:9,padding:“8px 12px”,marginTop:8,display:“flex”,justifyContent:“space-between”,alignItems:“center”}}>
+<div>
+<div style={{fontSize:7,color:”#2a2a44”,letterSpacing:1,marginBottom:2}}>{isSplit?`SPLIT STAKE (${plays.length}×)`:“KELLY STAKE”}</div>
+<div style={{fontSize:18,fontWeight:900,color:”#4488ff”}}>${dispStake.toFixed(2)}</div>
+<div style={{fontSize:8,color:”#555”}}>Win: <span style={{color:”#00d97e”}}>${profit.toFixed(2)}</span> · Kelly {b.sc.kellyPct}%</div>
+</div>
+{loggedIds.has(b.id)?<div style={{background:”#001f14”,border:“1px solid #00d97e”,borderRadius:9,padding:“8px 14px”,color:”#00d97e”,fontSize:11,fontWeight:900}}>✓ LOGGED</div>:
+<button onClick={()=>onFire(b)} style={{background:b.sc.action===“APPROVE”?“linear-gradient(135deg,#00d97e,#00b568)”:“linear-gradient(135deg,#1a2a44,#1e3255)”,border:b.sc.action===“APPROVE”?“none”:“1px solid #4488ff”,borderRadius:11,color:b.sc.action===“APPROVE”?”#000”:”#4488ff”,fontSize:14,fontWeight:900,padding:“10px 18px”,cursor:“pointer”}}>
+{b.sc.action===“APPROVE”?“🔥 FIRE”:“👁 WATCH”}
+</button>}
+</div>
+</div>
+<div onClick={()=>setExp(x=>!x)} style={{padding:“5px 14px”,borderTop:“1px solid #111128”,fontSize:8,color:”#2a2a44”,cursor:“pointer”,display:“flex”,justifyContent:“space-between”,letterSpacing:1}}>
+<span>⚗️ EDGE BREAKDOWN</span><span>{exp?“▲”:“▼”}</span>
+</div>
+{exp&&<div style={{padding:“10px 14px 12px”,background:”#060610”}}>
+{b.game.alert&&<div style={{background:”#1f1000”,border:“1px solid #fbbf2433”,borderRadius:6,padding:“3px 8px”,marginBottom:6,fontSize:8,color:”#fbbf24”}}>⚡ {b.game.alert}</div>}
+<div style={{display:“flex”,flexDirection:“column”,gap:4}}>
+{[{l:“Momentum”,v:b.sc.dMom},{l:“Stake/pressure”,v:b.sc.dStake},{l:“Sharp money”,v:b.sc.dSharp},{l:“Line move”,v:b.sc.dLine},{l:“Fade public”,v:b.sc.dPub},{l:“IH composite”,v:b.sc.dIH},{l:“Injury adj”,v:b.sc.dInj}]
+.filter(d=>d.v&&Math.abs(d.v)>0.001).map(d=>{
+const pct=+(d.v*100).toFixed(1); const c=pct>0?”#00d97e”:”#ef4444”;
+return(<div key={d.l} style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”}}>
+<span style={{fontSize:8,color:”#666”}}>{d.l}</span>
+<div style={{display:“flex”,gap:6,alignItems:“center”}}>
+<div style={{width:50,background:”#111128”,borderRadius:2,height:3}}><div style={{width:`${Math.min(100,Math.abs(pct)/10*100)}%`,height:“100%”,background:c,borderRadius:2}}/></div>
+<span style={{fontSize:9,fontWeight:700,color:c,width:38,textAlign:“right”}}>{pct>0?”+”:””}{pct}%</span>
+</div>
+</div>);
+})}
+</div>
+<div style={{fontSize:8,color:”#444”,marginTop:6,lineHeight:1.6}}>{b.game.context}</div>
+</div>}
+</div>);
+})}
+</>);
+}
+
+// ── OPERATOR MODE — ALL BETS ──────────────────────────────────────────────────
+function OperatorAllBets({allScored,onFire,loggedIds}){
+const [sort,setSort]=useState(“edge”);
+const [filter,setFilter]=useState(“ALL”);
+const [sportFilter,setSportFilter]=useState(“ALL”);
+const sports=[“ALL”,…new Set(GAMES.map(g=>g.sport))];
+const sorted=[…allScored].sort((a,b)=>sort===“edge”?b.sc.edge-a.sc.edge:sort===“gbs”?b.sc.gbs-a.sc.gbs:sort===“odds”?Math.abs(a.odds)-Math.abs(b.odds):b.sc.gwp-a.sc.gwp);
+const filtered=sorted.filter(b=>{
+if(sportFilter!==“ALL”&&b.game.sport!==sportFilter)return false;
+if(filter===“FIRE”&&b.sc.action!==“APPROVE”)return false;
+if(filter===“EDGE”&&b.sc.edge<=0)return false;
+if(filter===“WATCH”&&b.sc.action!==“WATCHLIST”)return false;
+return true;
+});
+return(<>
+{/* Controls */}
+<div style={{background:”#090916”,borderRadius:10,padding:“10px 12px”,marginBottom:10,border:“1px solid #151530”}}>
+<div style={{fontSize:8,color:”#333”,letterSpacing:1.5,marginBottom:6}}>{filtered.length} of {allScored.length} BETS · OPERATOR VIEW</div>
+{/* Sort */}
+<div style={{display:“flex”,gap:4,marginBottom:6}}>
+{[“edge”,“gbs”,“gwp”,“odds”].map(s=><button key={s} onClick={()=>setSort(s)}
+style={{flex:1,background:sort===s?”#00d97e22”:“transparent”,border:`1px solid ${sort===s?"#00d97e":"#1a1a30"}`,borderRadius:6,color:sort===s?”#00d97e”:”#444”,fontSize:9,padding:“4px 0”,cursor:“pointer”,fontWeight:sort===s?700:400,textTransform:“uppercase”}}>{s}</button>)}
+</div>
+{/* Action filter */}
+<div style={{display:“flex”,gap:4,marginBottom:6}}>
+{[[“ALL”,“All”],[“FIRE”,“✅ Fire”],[“EDGE”,“Edge+”],[“WATCH”,“👁 Watch”]].map(([v,l])=><button key={v} onClick={()=>setFilter(v)}
+style={{flex:1,background:filter===v?”#4488ff22”:“transparent”,border:`1px solid ${filter===v?"#4488ff":"#1a1a30"}`,borderRadius:6,color:filter===v?”#4488ff”:”#444”,fontSize:9,padding:“3px 0”,cursor:“pointer”}}>{l}</button>)}
+</div>
+{/* Sport filter */}
+<div style={{display:“flex”,gap:4,overflowX:“auto”}}>
+{sports.map(s=><button key={s} onClick={()=>setSportFilter(s)}
+style={{flexShrink:0,background:sportFilter===s?”#fbbf2422”:“transparent”,border:`1px solid ${sportFilter===s?"#fbbf24":"#1a1a30"}`,borderRadius:6,color:sportFilter===s?”#fbbf24”:”#444”,fontSize:9,padding:“3px 6px”,cursor:“pointer”}}>{s}</button>)}
+</div>
+</div>
+{/* Bet rows — ultra compact for operator scanning */}
+{filtered.map(b=>{
+const st=AC(b.sc.action); const arc=ARC[b.arc];
+const isLogged=loggedIds.has(b.id);
+return(<div key={b.id} style={{background:”#0a0a1e”,border:`1px solid ${st.c}22`,borderRadius:10,padding:“9px 12px”,marginBottom:6,display:“flex”,gap:10,alignItems:“center”}}>
+<EdgeBadge edge={b.sc.edge} size="sm"/>
+<div style={{flex:1,minWidth:0}}>
+<div style={{display:“flex”,gap:5,alignItems:“center”,marginBottom:2,flexWrap:“wrap”}}>
+<span style={{fontSize:8,color:st.c,fontWeight:900}}>{st.e}</span>
+{arc&&<span style={{fontSize:7,color:arc.color}}>{arc.emoji}</span>}
+<span style={{fontSize:8,color:”#333”}}>{b.game.emoji}{b.game.sport}</span>
+<span style={{background:”#13132a”,borderRadius:4,padding:“0px 5px”,fontSize:9,fontWeight:800,color:b.odds>0?”#00d97e”:”#aaa”}}>{fmt(b.odds)}</span>
+</div>
+<div style={{fontSize:11,fontWeight:700,color:”#ddd”,marginBottom:1,overflow:“hidden”,textOverflow:“ellipsis”,whiteSpace:“nowrap”}}>{b.label}</div>
+<div style={{display:“flex”,gap:8,fontSize:8,color:”#444”}}>
+<span>Mkt <b style={{color:”#666”}}>{b.sc.mktP}%</b></span>
+<span>GWP <b style={{color:”#00d97e”}}>{b.sc.gwp}%</b></span>
+<span>GBS <b style={{color:st.c}}>{b.sc.gbs}</b></span>
+<span>Kelly <b style={{color:”#4488ff”}}>${b.sc.kellyStake.toFixed(0)}</b></span>
+</div>
+</div>
+{isLogged?<div style={{fontSize:9,color:”#00d97e”,fontWeight:700}}>✓</div>:
+<button onClick={()=>onFire(b)} style={{background:b.sc.action===“APPROVE”?”#001f14”:“transparent”,border:`1px solid ${st.c}55`,borderRadius:8,color:st.c,fontSize:10,padding:“5px 8px”,cursor:b.sc.action===“BLOCK”?“not-allowed”:“pointer”,opacity:b.sc.action===“BLOCK”?0.4:1}}
+disabled={b.sc.action===“BLOCK”}>{b.sc.action===“APPROVE”?“🔥”:“👁”}</button>}
+</div>);
+})}
+</>);
+}
+
+// ── OPERATOR MODE — $1M PATH ──────────────────────────────────────────────────
+function MillionPath({user}){
+const [days,setDays]=useState(30);
+const [target]=useState(1000000);
+const req=requiredDailyROI(user.bankroll,target,days);
+const reqPct=+(req*100).toFixed(1);
+const path=calcMillionPath(user.bankroll,days,req);
+// Milestones
+const milestones=[10000,50000,100000,250000,500000,1000000];
+const msDays=milestones.map(m=>({target:m,day:path.findIndex(p=>p.bal>=m)+1||null}));
+// Feasibility
+const feasible=reqPct<=15;
+const color=reqPct<=8?”#00d97e”:reqPct<=15?”#fbbf24”:”#ef4444”;
+return(<div style={{background:“linear-gradient(135deg,#0a0a1e,#0d0d28)”,border:“1px solid #151530”,borderRadius:14,padding:“16px”,marginBottom:16}}>
+<div style={{fontSize:13,fontWeight:900,color:”#fff”,marginBottom:2}}>🎯 $1M Compounding Path</div>
+<div style={{fontSize:9,color:”#444”,marginBottom:14}}>Daily compounding from ${user.bankroll.toFixed(0)}</div>
+{/* Days selector */}
+<div style={{marginBottom:14}}>
+<div style={{fontSize:8,color:”#444”,letterSpacing:1,marginBottom:6}}>TARGET DAYS</div>
+<div style={{display:“flex”,gap:5}}>
+{[14,21,30,60,90].map(d=><button key={d} onClick={()=>setDays(d)}
+style={{flex:1,background:days===d?”#00d97e22”:”#0d0d1e”,border:`1px solid ${days===d?"#00d97e":"#1a1a30"}`,borderRadius:8,color:days===d?”#00d97e”:”#555”,fontSize:11,padding:“6px 0”,cursor:“pointer”,fontWeight:days===d?900:400}}>{d}d</button>)}
+</div>
+</div>
+{/* Required ROI */}
+<div style={{background:”#07070f”,border:`1px solid ${color}33`,borderRadius:12,padding:“14px”,marginBottom:14,textAlign:“center”}}>
+<div style={{fontSize:9,color:”#444”,letterSpacing:1,marginBottom:4}}>REQUIRED DAILY ROI</div>
+<div style={{fontSize:40,fontWeight:900,color,lineHeight:1}}>+{reqPct}%</div>
+<div style={{fontSize:9,color:color+“99”,marginTop:4}}>
+{reqPct<=5?“✅ Conservative — achievable with 3-4 +EV plays/day”:
+reqPct<=10?“⚡ Moderate — requires 5-6 plays at avg +8% edge”:
+reqPct<=20?“⚠️ Aggressive — needs high-stakes + parlays”:
+“🚫 Extreme — requires parlay stacking or line shopping”}
+</div>
+</div>
+{/* Bankroll milestones */}
+<div style={{marginBottom:14}}>
+<div style={{fontSize:8,color:”#444”,letterSpacing:1,marginBottom:8}}>MILESTONE PROJECTION</div>
+<div style={{display:“flex”,flexDirection:“column”,gap:5}}>
+{msDays.map(({target:t,day})=>{
+const hit=day&&day>0;
+const pct=hit?Math.round((day/days)*100):100;
+const c=hit?”#00d97e”:”#333”;
+return(<div key={t} style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,gap:10}}>
+<span style={{fontSize:9,color:hit?”#ccc”:”#333”,width:70,flexShrink:0}}>{fmt2(t)}</span>
+<div style={{flex:1,background:”#111128”,borderRadius:2,height:4}}>
+<div style={{width:`${pct}%`,height:“100%”,background:c,borderRadius:2}}/>
+</div>
+<span style={{fontSize:9,fontWeight:700,color:c,width:40,textAlign:“right”,flexShrink:0}}>{hit?`Day ${day}`:”—”}</span>
+</div>);
+})}
+</div>
+</div>
+{/* Bankroll curve (text-based) */}
+<div style={{background:”#07070f”,borderRadius:10,padding:“10px 12px”}}>
+<div style={{fontSize:8,color:”#444”,letterSpacing:1,marginBottom:6}}>COMPOUNDING CURVE — KEY CHECKPOINTS</div>
+<div style={{display:“grid”,gridTemplateColumns:“1fr 1fr 1fr”,gap:6}}>
+{[Math.floor(days/4),Math.floor(days/2),Math.floor(days*3/4),days].filter((d,i,a)=>a.indexOf(d)===i).map(d=>{
+const entry=path[d-1];
+return entry?(<div key={d} style={{background:”#0d0d1e”,borderRadius:7,padding:“6px”,textAlign:“center”}}>
+<div style={{fontSize:7,color:”#333”,marginBottom:1}}>Day {d}</div>
+<div style={{fontSize:11,fontWeight:900,color:entry.bal>=1000000?”#00d97e”:entry.bal>=100000?”#4488ff”:”#fbbf24”}}>{fmt2(entry.bal)}</div>
+</div>):null;
+})}
+</div>
+</div>
+<div style={{marginTop:10,fontSize:8,color:”#2a2a44”,lineHeight:1.6,background:”#0a0a14”,borderRadius:8,padding:“8px 10px”}}>
+⚠️ This assumes all profits are reinvested daily and each day achieves the required ROI. Real results vary. NON-ACTION is a winning system output.
+</div>
+
+  </div>);
+}
+
+// ── OPERATOR MODE — IH CONTROLS ───────────────────────────────────────────────
+function IHPanel({ih,setIh}){
+const score=calcIH(ih);
+const scoreC=score>0.3?”#00d97e”:score>0?”#4488ff”:score>-0.3?”#fbbf24”:”#ef4444”;
+return(<div style={{background:“linear-gradient(135deg,#0a0a1e,#0d0d28)”,border:“1px solid #151530”,borderRadius:14,padding:“16px”,marginBottom:16}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:12}}>
+<div>
+<div style={{fontSize:13,fontWeight:900,color:”#fff”}}>🧠 Invisible Hinge</div>
+<div style={{fontSize:8,color:”#444”}}>Adjust signal weights · IH multiplies GWP</div>
+</div>
+<div style={{background:”#07070f”,borderRadius:10,padding:“8px 14px”,textAlign:“center”,border:`1px solid ${scoreC}33`}}>
+<div style={{fontSize:8,color:”#444”,marginBottom:2}}>IH SCORE</div>
+<div style={{fontSize:22,fontWeight:900,color:scoreC}}>{score>0?”+”:””}{(score*100).toFixed(0)}</div>
+</div>
+</div>
+{[
+{k:“rlm”,   l:“Reverse Line Movement”, neg:false},
+{k:“steam”, l:“Steam Move”,            neg:false},
+{k:“sharpDiv”,l:“Sharp $ Divergence”,  neg:false},
+{k:“polyDiverg”,l:“Polymarket”,        neg:false},
+{k:“clvExpect”,l:“CLV Expectation”,    neg:false},
+{k:“socialNoise”,l:“Social Noise”,     neg:true},
+{k:“fatigue”,l:“Fatigue Factor”,       neg:true},
+{k:“lmTripwire”,l:“Last-Min Tripwire”, neg:true},
+].map(s=>{
+const v=ih[s.k]??0;
+const c=s.neg?(v>0.3?”#ef4444”:”#555”):(v>0.3?”#00d97e”:v<-0.3?”#ef4444”:”#555”);
+return(<div key={s.k} style={{background:”#0d0d1e”,borderRadius:8,padding:“8px 10px”,marginBottom:6}}>
+<div style={{display:“flex”,justifyContent:“space-between”,marginBottom:4}}>
+<span style={{fontSize:10,color:”#aaa”}}>{s.l}</span>
+<span style={{fontSize:12,fontWeight:900,color:c}}>{Math.round(v*100)}</span>
+</div>
+<input type=“range” min=”-100” max=“100” step=“5” value={Math.round(v*100)}
+onChange={e=>setIh(p=>({…p,[s.k]:parseInt(e.target.value)/100}))}
+style={{width:“100%”,accentColor:s.neg?”#ef4444”:”#00d97e”,cursor:“pointer”}}/>
+</div>);
+})}
+
+  </div>);
+}
+
+// ── HISTORY PANEL ─────────────────────────────────────────────────────────────
+function HistPanel({history,onSettle,onClear}){
+const [f,setF]=useState(“pending”);
+const pending=history.filter(h=>!h.result);
+const shown=f===“pending”?pending:f===“all”?history:history.filter(h=>h.result===f);
+return(<div style={{background:“linear-gradient(135deg,#0a0a1e,#0d0d28)”,border:“1px solid #151530”,borderRadius:14,padding:“14px”,marginBottom:16}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:10}}>
+<div style={{fontSize:12,fontWeight:900,color:”#fff”}}>📋 Bet History</div>
+<div style={{display:“flex”,gap:3}}>
+{[“pending”,“win”,“loss”,“all”].map(x=><button key={x} onClick={()=>setF(x)}
+style={{background:f===x?”#00d97e22”:“transparent”,border:`1px solid ${f===x?"#00d97e":"#1a1a30"}`,borderRadius:5,color:f===x?”#00d97e”:”#333”,fontSize:8,padding:“2px 5px”,cursor:“pointer”}}>
+{x}{x===“pending”&&pending.length>0?` (${pending.length})`:””}</button>)}
+</div>
+</div>
+{shown.length===0&&<div style={{textAlign:“center”,color:”#2a2a44”,fontSize:11,padding:“20px”}}>
+{f===“pending”?“No pending bets”:“No “+f+” bets yet”}</div>}
+{shown.filter(h=>!h.result).map(h=>(
+<div key={h.id} style={{background:”#0d0d1e”,border:“1px solid #00d97e22”,borderRadius:9,padding:“9px”,marginBottom:7}}>
+<div style={{display:“flex”,justifyContent:“space-between”,marginBottom:4}}>
+<div style={{flex:1,paddingRight:8}}>
+<div style={{fontSize:8,color:”#333”,marginBottom:1}}>{h.gameName}</div>
+<div style={{fontSize:11,fontWeight:700,color:”#fff”,marginBottom:1}}>{h.label}</div>
+<div style={{fontSize:8,color:”#444”}}>{new Date(h.ts).toLocaleDateString()} · ${h.stake.toFixed(2)} @ {fmt(h.odds)}</div>
+</div>
+<div style={{fontSize:9,color:”#fbbf24”,fontWeight:700,flexShrink:0}}>⏳ PENDING</div>
+</div>
+<div style={{display:“flex”,gap:5}}>
+<button onClick={()=>onSettle(h.id,“win”)} style={{flex:1,background:”#001f14”,border:“1px solid #00d97e”,borderRadius:7,color:”#00d97e”,fontSize:9,padding:“5px”,cursor:“pointer”,fontWeight:700}}>
+✅ WIN +${(payout(h.stake,h.odds)-h.stake).toFixed(2)}</button>
+<button onClick={()=>onSettle(h.id,“loss”)} style={{flex:1,background:”#1a0000”,border:“1px solid #ef4444”,borderRadius:7,color:”#ef4444”,fontSize:9,padding:“5px”,cursor:“pointer”,fontWeight:700}}>
+❌ LOSS -${h.stake.toFixed(2)}</button>
+<button onClick={()=>onSettle(h.id,“push”)} style={{background:”#0d0d1e”,border:“1px solid #333”,borderRadius:7,color:”#555”,fontSize:9,padding:“5px 7px”,cursor:“pointer”}}>Push</button>
+</div>
+</div>
+))}
+{shown.filter(h=>h.result).map(h=>{
+const rc=h.result===“win”?”#00d97e”:h.result===“loss”?”#ef4444”:”#888”;
+const net=h.result===“win”?payout(h.stake,h.odds)-h.stake:h.result===“loss”?-h.stake:0;
+return(<div key={h.id} style={{background:”#0d0d1e”,border:`1px solid ${rc}22`,borderRadius:9,padding:“8px 10px”,marginBottom:5,display:“flex”,justifyContent:“space-between”,alignItems:“center”}}>
+<div style={{flex:1,paddingRight:8}}>
+<div style={{fontSize:8,color:”#333”,marginBottom:1}}>{h.gameName}</div>
+<div style={{fontSize:10,fontWeight:700,color:”#ccc”}}>{h.label}</div>
+<div style={{fontSize:8,color:”#333”}}>{new Date(h.ts).toLocaleDateString()} · ${h.stake.toFixed(2)} @ {fmt(h.odds)}</div>
+</div>
+<div style={{textAlign:“right”}}>
+<div style={{fontSize:9,fontWeight:900,color:rc,textTransform:“uppercase”}}>{h.result}</div>
+<div style={{fontSize:12,fontWeight:900,color:rc}}>{net>=0?”+”:””}${net.toFixed(2)}</div>
+</div>
+</div>);
+})}
+{history.length>0&&<button onClick={onClear} style={{width:“100%”,marginTop:6,background:“none”,border:“1px solid #1a1a30”,borderRadius:7,color:”#2a2a44”,fontSize:9,padding:“5px”,cursor:“pointer”}}>Clear History</button>}
+
+  </div>);
+}
+
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
+// ── PASSWORD GATE ─────────────────────────────────────────────────────────────
+const PASS_KEY = “gos:auth”;
+const CORRECT  = “0917”;
+
+function PasswordGate({onUnlock}) {
+const [val, setVal]   = useState(””);
+const [err, setErr]   = useState(false);
+const [shake, setShk] = useState(false);
+const inputRef        = useRef(null);
+
+useEffect(()=>{ inputRef.current?.focus(); },[]);
+
+const attempt = () => {
+if (val === CORRECT) {
+sessionStorage.setItem(PASS_KEY, “1”);
+onUnlock();
+} else {
+setErr(true); setShk(true); setVal(””);
+setTimeout(()=>setShk(false), 500);
+setTimeout(()=>setErr(false),  2000);
+}
+};
+
+const handleKey = e => { if(e.key===“Enter”) attempt(); };
+
+return (
+<div style={{minHeight:“100vh”,background:”#08081c”,display:“flex”,flexDirection:“column”,alignItems:“center”,justifyContent:“center”,padding:24}}>
+<style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+
+```
+  {/* Logo */}
+  <div style={{marginBottom:32,textAlign:"center"}}>
+    <div style={{fontSize:42,marginBottom:10}}>⚡</div>
+    <div style={{fontSize:24,fontWeight:900,letterSpacing:-1}}>
+      <span style={{color:"#00d97e"}}>Guardian</span>
+      <span style={{color:"#fff"}}> OS</span>
+    </div>
+    <div style={{fontSize:10,color:"#2a2a44",marginTop:4,letterSpacing:2}}>BETTING INTELLIGENCE SYSTEM</div>
+    <div style={{fontSize:9,color:"#1a1a30",marginTop:2}}>Guardian OS Holdings LLC</div>
+  </div>
+
+  {/* Input */}
+  <div style={{width:"100%",maxWidth:280,animation:shake?"shake .4s ease":"none"}}>
+    <div style={{fontSize:9,color:"#333",letterSpacing:2,textAlign:"center",marginBottom:10}}>ENTER ACCESS CODE</div>
+    <input
+      ref={inputRef}
+      type="password"
+      inputMode="numeric"
+      maxLength={8}
+      placeholder="••••"
+      value={val}
+      onChange={e=>{ setVal(e.target.value); setErr(false); }}
+      onKeyDown={handleKey}
+      style={{
+        width:"100%", background:"#0d0d1e",
+        border:`2px solid ${err?"#ef4444":"#1e1e38"}`,
+        borderRadius:14, color:"#fff", fontSize:28, fontWeight:900,
+        padding:"16px", textAlign:"center", letterSpacing:8,
+        transition:"border-color .2s",
+      }}
+    />
+    {err && (
+      <div style={{textAlign:"center",color:"#ef4444",fontSize:10,marginTop:8,letterSpacing:1}}>
+        ACCESS DENIED
+      </div>
+    )}
+    <button
+      onClick={attempt}
+      style={{
+        width:"100%", marginTop:12,
+        background:"linear-gradient(90deg,#00d97e,#00b568)",
+        border:"none", borderRadius:12, color:"#000",
+        fontSize:15, fontWeight:900, padding:"14px", cursor:"pointer",
+        letterSpacing:.5,
+      }}
+    >
+      UNLOCK →
+    </button>
+  </div>
+
+  {/* Dot pattern background */}
+  <div style={{position:"fixed",inset:0,zIndex:-1,backgroundImage:"radial-gradient(circle,#00d97e08 1px,transparent 1px)",backgroundSize:"24px 24px",pointerEvents:"none"}}/>
+</div>
+```
+
+);
+}
+
+export default function GuardianOS() {
+const [authed, setAuthed] = useState(()=> sessionStorage.getItem(PASS_KEY)===“1”);
+if (!authed) return <PasswordGate onUnlock={()=>setAuthed(true)}/>;
+return <GuardianOSApp/>;
+}
+
+function GuardianOSApp() {
+const [ready,setReady]=useState(false);
+const [user,setUser]=useState(DEFAULT_USER);
+const [ih,setIhState]=useState(DEFAULT_IH);
+const [history,setHistory]=useState([]);
+const [sessions,setSessions]=useState([]);
+const [mode,setMode]=useState(“bettor”); // “bettor” | “operator”
+const [tab,setTab]=useState(“plays”);
+const [opTab,setOpTab]=useState(“all”);
+const [fireTarget,setFireTarget]=useState(null);
+const [liveLoading,setLiveLoading]=useState(false);
+const [lastFetch,setLastFetch]=useState(null);
+const [narrative,setNarrative]=useState(””);
+const [alerts,setAlerts]=useState([]);
+const [saveStatus,setSaveStatus]=useState(“saved”);
+const saveTimer=useRef(null);
+const iRef=useRef(null);
+
+// Load from storage
+useEffect(()=>{(async()=>{
+const [u,h,s,i]=await Promise.all([load(SK.user,DEFAULT_USER),load(SK.history,[]),load(SK.sessions,[]),load(SK.ih,DEFAULT_IH)]);
+setUser(u);setHistory(h);setSessions(s);setIhState(i);setReady(true);
+})();},[]);
+
+const ihScore=calcIH(ih);
+const loggedIds=new Set(history.filter(h=>!h.result).map(h=>h.betId));
+
+// Debounced save
+const persist=useCallback((u,h,s,i)=>{
+setSaveStatus(“unsaved”);
+clearTimeout(saveTimer.current);
+saveTimer.current=setTimeout(async()=>{
+setSaveStatus(“saving”);
+await Promise.all([save(SK.user,u),save(SK.history,h),save(SK.sessions,s),save(SK.ih,i)]);
+setSaveStatus(“saved”);
+},800);
+},[]);
+
+const setU=useCallback(v=>{setUser(v);persist(v,history,sessions,ih);},[history,sessions,ih,persist]);
+const setH=useCallback(v=>{setHistory(v);persist(user,v,sessions,ih);},[user,sessions,ih,persist]);
+const setS=useCallback(v=>{setSessions(v);persist(user,history,v,ih);},[user,history,ih,persist]);
+const setIh=useCallback(v=>{setIhState(v);persist(user,history,sessions,v);},[user,history,sessions,persist]);
+
+// Live fetch
+const doFetch=useCallback(async()=>{
+setLiveLoading(true);
+try{
+const d=await fetchLive();
+if(d){
+setLastFetch(d.ts||new Date().toISOString());
+if(d.alerts)setAlerts(d.alerts);
+if(d.narrative)setNarrative(d.narrative);
+if(d.ih)setIhState(prev=>({…prev,…d.ih}));
+}
+}catch(e){console.error(e);}
+setLiveLoading(false);
+},[]);
+
+useEffect(()=>{ doFetch(); iRef.current=setInterval(doFetch,8*60*1000); return()=>clearInterval(iRef.current); },[]);
+
+// Computed data
+const plays=topPlays(user,ihScore);
+const allScored=scoreAll(user,ihScore);
+const pending=history.filter(h=>!h.result).length;
+
+// Fire + settle
+const fireBet=(bet,stake)=>{
+const e={id:`${bet.id}-${Date.now()}`,betId:bet.id,label:bet.label,odds:bet.odds,side:bet.side,
+gameName:bet.gameName,stake,arc:bet.arc||null,gbsScore:bet.sc.gbs,action:bet.sc.action,ts:new Date().toISOString(),result:null};
+setH([…history,e]);
+setU({…user,betsToday:user.betsToday+1,totalBets:user.totalBets+1,totalWagered:user.totalWagered+stake,bankroll:user.bankroll-stake});
+setFireTarget(null);
+setTab(“history”);
+};
+const settleBet=(id,result)=>{
+const e=history.find(h=>h.id===id); if(!e)return;
+const p=result===“win”?payout(e.stake,e.odds):result===“push”?e.stake:0;
+const profit=p-e.stake;
+setH(history.map(h=>h.id===id?{…h,result,settledAt:new Date().toISOString()}:h));
+setU({…user,bankroll:user.bankroll+p,totalReturned:user.totalReturned+p,
+wins:result===“win”?user.wins+1:user.wins,losses:result===“loss”?user.losses+1:user.losses,
+winStreak:result===“win”?user.winStreak+1:0,lossStreak:result===“loss”?user.lossStreak+1:0,
+drift:result===“loss”?Math.min(1,user.drift+.08):Math.max(0,user.drift-.05),
+eAcc:user.eAcc+profit/1000,bCapRatio:+(user.bankroll+p)/1000});
+};
+const endSession=()=>{
+const today=new Date().toLocaleDateString(‘en-US’,{month:‘short’,day:‘numeric’,year:‘numeric’});
+const td=history.filter(h=>new Date(h.ts).toDateString()===new Date().toDateString());
+const wins=td.filter(h=>h.result===“win”).length;
+const losses=td.filter(h=>h.result===“loss”).length;
+const wagered=td.reduce((s,h)=>s+h.stake,0);
+const returned=td.filter(h=>h.result===“win”).reduce((s,h)=>s+payout(h.stake,h.odds),0)+td.filter(h=>h.result===“push”).reduce((s,h)=>s+h.stake,0);
+setS([…sessions,{date:today,bets:td.length,wins,losses,wagered,returned,endBankroll:user.bankroll}]);
+setU({…user,betsToday:0,bowlUsed:0,drift:Math.max(0,user.drift-.1)});
+};
+
+const BETTOR_TABS=[{id:“plays”,l:“🔥”},{id:“history”,l:`📋${pending>0?` ${pending}`:""}`}];
+const OP_TABS=[{id:“all”,l:“📋 All Bets”},{id:“million”,l:“🎯 $1M Path”},{id:“ih”,l:“🧠 IH”},{id:“sessions”,l:“📅 Sessions”}];
+
+if(!ready)return(<div style={{minHeight:“100vh”,background:”#08081c”,display:“flex”,flexDirection:“column”,alignItems:“center”,justifyContent:“center”,gap:12}}>
+<style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+<div style={{fontSize:36,animation:“spin 1s linear infinite”}}>⚡</div>
+<div style={{color:”#00d97e”,fontSize:14,fontWeight:700}}>Guardian OS Loading…</div>
+<div style={{color:”#333”,fontSize:9}}>Restoring your session</div>
+
+  </div>);
+
+return(<div style={{minHeight:“100vh”,background:”#08081c”,color:”#fff”,fontFamily:”‘Nunito’,‘Segoe UI’,sans-serif”,maxWidth:480,margin:“0 auto”}}>
+<style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}} input[type=number],input[type=range]{outline:none} ::-webkit-scrollbar{width:0}*{box-sizing:border-box}`}</style>
+
+```
+{fireTarget&&<FireModal bet={fireTarget} onConfirm={fireBet} onClose={()=>setFireTarget(null)} totalPlays={plays.length}/>}
+
+{/* ── HEADER ── */}
+<div style={{background:"#0a0a1e",padding:"10px 12px 0",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid #0f0f22"}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+    <div>
+      <div style={{fontSize:16,fontWeight:900,letterSpacing:-.5}}>
+        <span style={{color:"#00d97e"}}>Guardian</span> OS
+        <span style={{fontSize:8,color:"#00d97e",marginLeft:6,background:"#001f14",borderRadius:4,padding:"1px 5px",border:"1px solid #00d97e22"}}>v17</span>
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:1,alignItems:"center"}}>
+        <span style={{fontSize:7,color:saveStatus==="saved"?"#00d97e33":saveStatus==="saving"?"#4488ff":"#fbbf24"}}>
+          {saveStatus==="saved"?"✓ saved":saveStatus==="saving"?"↻ saving":"● unsaved"}
+        </span>
+        <span style={{fontSize:7,color:"#1a1a30"}}>{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+      </div>
+    </div>
+    <div style={{display:"flex",gap:5,alignItems:"center"}}>
+      {/* Mode toggle */}
+      <div style={{display:"flex",background:"#090916",borderRadius:8,padding:2,border:"1px solid #151530",gap:2}}>
+        {[["bettor","👤"],["operator","⚙️"]].map(([m,icon])=><button key={m} onClick={()=>setMode(m)}
+          style={{background:mode===m?"#00d97e":"transparent",border:"none",borderRadius:6,color:mode===m?"#000":"#444",fontSize:12,padding:"4px 8px",cursor:"pointer",fontWeight:mode===m?900:400}}>
+          {icon}</button>)}
+      </div>
+      {/* Win% */}
+      <div style={{background:"#090916",borderRadius:7,padding:"3px 7px",textAlign:"center",border:"1px solid #151530"}}>
+        <div style={{fontSize:6,color:"#333",letterSpacing:1}}>WIN%</div>
+        <div style={{fontSize:12,fontWeight:900,lineHeight:1,color:user.wins/Math.max(1,user.totalBets)>=.55?"#00d97e":"#fbbf24"}}>
+          {Math.round(user.wins/Math.max(1,user.totalBets)*100)}%</div>
+      </div>
+      {/* Roll */}
+      <div style={{background:"#090916",borderRadius:7,padding:"3px 7px",textAlign:"center",border:"1px solid #151530"}}>
+        <div style={{fontSize:6,color:"#333",letterSpacing:1}}>ROLL</div>
+        <div style={{fontSize:12,fontWeight:900,color:"#4488ff",lineHeight:1}}>${user.bankroll.toFixed(0)}</div>
+      </div>
+      <button onClick={endSession} style={{background:"#0d0d20",border:"1px solid #1a1a30",borderRadius:7,color:"#fbbf24",fontSize:11,width:28,height:28,cursor:"pointer"}}>🏁</button>
+      <button onClick={doFetch} disabled={liveLoading} style={{background:"#0d0d20",border:"1px solid #1a1a30",borderRadius:7,color:liveLoading?"#4488ff":"#00d97e",fontSize:13,width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{display:"inline-block",animation:liveLoading?"spin 1s linear infinite":"none"}}>↻</span>
+      </button>
+    </div>
+  </div>
+
+  {/* Tab bar — changes by mode */}
+  {mode==="bettor"?(
+    <div style={{display:"flex",gap:3}}>
+      {BETTOR_TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)}
+        style={{flex:1,background:tab===t.id?"#00d97e":"transparent",border:`1px solid ${tab===t.id?"#00d97e":"transparent"}`,borderBottom:"none",borderRadius:"8px 8px 0 0",color:tab===t.id?"#000":"#2a2a44",fontSize:13,padding:"7px 4px",cursor:"pointer",fontWeight:tab===t.id?900:400}}>
+        {t.l}</button>)}
+      {/* Quick-access operator tabs */}
+      <button onClick={()=>{setMode("operator");setOpTab("all");}}
+        style={{background:"transparent",border:"1px solid #1a1a2e",borderBottom:"none",borderRadius:"8px 8px 0 0",color:"#2a2a44",fontSize:11,padding:"7px 8px",cursor:"pointer"}}>
+        All Bets ›
+      </button>
+    </div>
+  ):(
+    <div style={{display:"flex",gap:3,overflowX:"auto",scrollbarWidth:"none"}}>
+      {OP_TABS.map(t=><button key={t.id} onClick={()=>setOpTab(t.id)}
+        style={{flexShrink:0,background:opTab===t.id?"#00d97e":"transparent",border:`1px solid ${opTab===t.id?"#00d97e":"transparent"}`,borderBottom:"none",borderRadius:"8px 8px 0 0",color:opTab===t.id?"#000":"#2a2a44",fontSize:11,padding:"7px 8px",cursor:"pointer",fontWeight:opTab===t.id?900:400,whiteSpace:"nowrap"}}>
+        {t.l}</button>)}
+      <button onClick={()=>{setMode("bettor");setTab("plays");}}
+        style={{flexShrink:0,background:"transparent",border:"1px solid #1a1a2e",borderBottom:"none",borderRadius:"8px 8px 0 0",color:"#2a2a44",fontSize:11,padding:"7px 8px",cursor:"pointer"}}>
+        ← Plays
+      </button>
+    </div>
+  )}
+</div>
+
+{/* ── BODY ── */}
+<div style={{padding:"12px 12px 70px",animation:"fadeIn .25s ease"}}>
+  {/* BETTOR MODE */}
+  {mode==="bettor"&&tab==="plays"&&(
+    <BettorPlays plays={plays} onFire={setFireTarget} loggedIds={loggedIds} user={user} narrative={narrative} alerts={alerts} liveLoading={liveLoading}/>
+  )}
+  {mode==="bettor"&&tab==="history"&&(
+    <HistPanel history={history} onSettle={settleBet} onClear={()=>{if(window.confirm("Clear all history?"))setH([]);}}/>
+  )}
+
+  {/* OPERATOR MODE */}
+  {mode==="operator"&&opTab==="all"&&(
+    <OperatorAllBets allScored={allScored} onFire={setFireTarget} loggedIds={loggedIds}/>
+  )}
+  {mode==="operator"&&opTab==="million"&&(
+    <MillionPath user={user}/>
+  )}
+  {mode==="operator"&&opTab==="ih"&&(
+    <IHPanel ih={ih} setIh={setIh}/>
+  )}
+  {mode==="operator"&&opTab==="sessions"&&(
+    <div style={{background:"linear-gradient(135deg,#0a0a1e,#0d0d28)",border:"1px solid #151530",borderRadius:14,padding:"14px",marginBottom:16}}>
+      <div style={{fontSize:12,fontWeight:900,color:"#fff",marginBottom:12}}>📅 Session Log</div>
+      {sessions.length===0&&<div style={{textAlign:"center",color:"#2a2a44",fontSize:11,padding:"20px"}}>No sessions. Tap 🏁 to close out your day.</div>}
+      {[...sessions].reverse().map((s,i)=>{
+        const profit=s.returned-s.wagered;
+        return(<div key={i} style={{background:"#0d0d1e",border:`1px solid ${profit>=0?"#00d97e22":"#ef444422"}`,borderRadius:9,padding:"10px",marginBottom:7}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#fff"}}>{s.date}</div>
+            <div style={{fontSize:12,fontWeight:900,color:profit>=0?"#00d97e":"#ef4444"}}>{profit>=0?"+":""}${profit.toFixed(2)}</div>
+          </div>
+          <div style={{display:"flex",gap:10,fontSize:8,color:"#555"}}>
+            <span>Bets: <b style={{color:"#888"}}>{s.bets}</b></span>
+            <span>W: <b style={{color:"#00d97e"}}>{s.wins}</b></span>
+            <span>L: <b style={{color:"#ef4444"}}>{s.losses}</b></span>
+            <span>Risked: <b style={{color:"#888"}}>${s.wagered.toFixed(0)}</b></span>
+            <span>Roll: <b style={{color:"#4488ff"}}>${s.endBankroll.toFixed(0)}</b></span>
+          </div>
+        </div>);
+      })}
+    </div>
+  )}
+
+  <div style={{textAlign:"center",fontSize:7,color:"#111",lineHeight:2,marginTop:4}}>
+    Guardian OS Holdings LLC · NON-ACTION is a winning system output
+  </div>
+</div>
+```
+
+  </div>);
+} // end GuardianOSApp
+</script>
+<script>
+  window.addEventListener('load',()=>{
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    // Mount React app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(GuardianOS));
+  });
+</script>
+</body>
+</html>
